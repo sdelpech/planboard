@@ -1,6 +1,6 @@
 Planning Board
 
-Le script récupère les agendas cochés dans Google Calendar et génère un tableau avec une vue horizontale permettant d'avoir une vue des événements.
+Le script récupère les agendas cochés dans Google Calendar et génère un tableau permettant d'avoir une vue d'ensemble des événements.
 
 1. Creez une nouvelle feuille de calcul.
 2. Cliquez le menu "Extensions" > Apps Script.
