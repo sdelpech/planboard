@@ -9,9 +9,23 @@ function lance_script(){
 
 function onOpen() {
   SpreadsheetApp.getUi()
-	.createMenu('IUT Planning')
-	.addItem('Rafraichir', 'lance_script')
-	.addToUi();
+  .createMenu('IUT Planning')
+  .addItem('Rafraichir', 'lance_script')
+    .addSeparator()
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Affichage')
+      .addItem('Étendre tous les groupes', 'expandAllGroups')
+      .addItem('Regrouper tous les groupes', 'collapseAllGroups'))
+    .addToUi();
+}
+
+function expandAllGroups() {
+  var sheet = SpreadsheetApp.getActiveSheet();
+  sheet.expandAllRowGroups()
+}
+
+function collapseAllGroups() {
+  var sheet = SpreadsheetApp.getActiveSheet();
+  sheet.collapseAllRowGroups()
 }
 
 function ajout_lignes_debut(){
@@ -29,7 +43,7 @@ function ajout_lignes_debut(){
 
   //Alignement dans les cellules
   var range = sheet.getDataRange(); 
-	// Set horizontal alignment to LEFT for all cells in that range
+  // Set horizontal alignment to LEFT for all cells in that range
   range.setHorizontalAlignment("left"); 
 
   // Bordure titres des evenements et alignement au centre.
@@ -48,8 +62,8 @@ function sheetId(){
 
 function listCalendarEventsById(calendarId,num,coul) {
   if (!calendarId) {
-	Logger.log("Erreur : Aucun ID de calendrier n'a été fourni.");
-	return;
+  Logger.log("Erreur : Aucun ID de calendrier n'a été fourni.");
+  return;
   }
   var sheet = SpreadsheetApp.getActiveSheet();
   var today = new Date();
@@ -57,54 +71,50 @@ function listCalendarEventsById(calendarId,num,coul) {
   fourMonthsLater.setMonth(today.getMonth() + 4); // Ajoute 4 mois à la date actuelle
   var calendar;
   try {
-	calendar = CalendarApp.getCalendarById(calendarId);
+  calendar = CalendarApp.getCalendarById(calendarId);
   } catch (e) {
-	Logger.log("Erreur lors de la récupération du calendrier par ID: " + e.message);
-	Logger.log("Assurez-vous que l'ID est correct et que le script a les permissions d'accès à ce calendrier.");
-	return;
+  Logger.log("Erreur lors de la récupération du calendrier par ID: " + e.message);
+  Logger.log("Assurez-vous que l'ID est correct et que le script a les permissions d'accès à ce calendrier.");
+  return;
   }
 
   if (!calendar) {
-	Logger.log("Erreur : Le calendrier avec l'ID '" + calendarId + "' n'a pas été trouvé ou le script n'a pas les permissions nécessaires.");
-	return;
+  Logger.log("Erreur : Le calendrier avec l'ID '" + calendarId + "' n'a pas été trouvé ou le script n'a pas les permissions nécessaires.");
+  return;
   }
   var events = calendar.getEvents(today, fourMonthsLater);
   if (events.length > 0) {
-	//Colorise la première ligne
-	Logger.log("Colorise la première ligne du calendrier")
-	events.forEach(function(event) {
-	  Logger.log(event.getStartTime())
-	  Logger.log("https://winlog.iut-rodez.fr/admin/planing/ljour.php?l=s&d=" + formatDate(event.getStartTime()) + "&f=" + formatDate(event.getEndTime()) + "&r="+num)
-	  respcolor  = UrlFetchApp.fetch("https://winlog.iut-rodez.fr/admin/planing/ljour.php?l=s&d=" + formatDate(event.getStartTime()) + "&f=" + formatDate(event.getEndTime()) + "&r="+num)
-	  rangecolor = respcolor.getContentText()
-	  Logger.log(JSON.parse(rangecolor))
-	  sheet.getRange(JSON.parse(rangecolor)).setBackgroundColor(coul);
-	  Logger.log(rangecolor)
-	  var note = event.getTitle() + "\n" + formatDateTime(event.getStartTime())
-	  addNotesToRange(JSON.parse(rangecolor),note)
-	  Utilities.sleep(1000);
-	});
-	//
-	
-	// Repasse pour faire une ligne par évenement :
-	var ligne_debut = sheet.getLastRow() +1
-	events.forEach(function(event) {
-	  //Ajustement de la date : 
-	  sheet.appendRow(["",event.getTitle(),formatDate(event.getStartTime()),event.getLocation(),formatTime(event.getStartTime())])
-	  var range = sheet.getRange("A"+sheet.getLastRow()+":E"+sheet.getLastRow());
-	range.setBackgroundColor(coul);
-	  respcolor  = UrlFetchApp.fetch("https://winlog.iut-rodez.fr/admin/planing/ljour.php?l=s&d=" + formatDate(event.getStartTime()) + "&f=" + formatDate(event.getEndTime()) + "&r="+num)
-	  rangecolor = respcolor.getContentText()
-	  sheet.getRange(JSON.parse(rangecolor)).setBackgroundColor(coul);
-	  Utilities.sleep(1000);
-	});
-	var ligne_fin = sheet.getLastRow()
-	groupeLigne(ligne_debut,ligne_fin)
-	var range = sheet.getRange("A"+ ligne_debut+":E"+ligne_fin); 
-	range.setHorizontalAlignment("left")
+  //Colorise la première ligne
+  Logger.log("Colorise la première ligne du calendrier")
+  events.forEach(function(event) {
+    respcolor  = UrlFetchApp.fetch("https://winlog.iut-rodez.fr/admin/planing/ljour.php?l=s&d=" + formatDate(event.getStartTime()) + "&f=" + formatDate(event.getEndTime()) + "&r="+num)
+    rangecolor = respcolor.getContentText()
+    sheet.getRange(JSON.parse(rangecolor)).setBackgroundColor(coul);
+    var note = event.getTitle() + "\n" + formatDateTime(event.getStartTime())
+    addNotesToRange(JSON.parse(rangecolor),note)
+    Utilities.sleep(1000);
+  });
+  //
+  
+  // Repasse pour faire une ligne par évenement :
+  var ligne_debut = sheet.getLastRow() +1
+    events.forEach(function(event) {
+      //Ajustement de la date : 
+      sheet.appendRow(["",event.getTitle(),formatDate(event.getStartTime()),event.getLocation(),formatTime(event.getStartTime())])
+      sheet.getRange("A"+sheet.getLastRow()+":E"+sheet.getLastRow()).setBackgroundColor(coul);
+      respcolor  = UrlFetchApp.fetch("https://winlog.iut-rodez.fr/admin/planing/ljour.php?l=s&d=" + formatDate(event.getStartTime()) + "&f=" + formatDate(event.getEndTime()) + "&r="+sheet.getLastRow())
+      respcolor = respcolor.getContentText()
+      Logger.log(respcolor)
+      sheet.getRange(JSON.parse(respcolor)).setBackgroundColor(coul);
+      Utilities.sleep(900);
+    });
+  var ligne_fin = sheet.getLastRow()
+  groupeLigne(ligne_debut,ligne_fin)
+  var range = sheet.getRange("A"+ ligne_debut+":E"+ligne_fin); 
+  range.setHorizontalAlignment("left")
   
   } else {
-	Logger.log("Aucun événement trouvé pour les 4 prochains mois dans le calendrier '" + calendar.getName() + "' (ID: " + calendar.getId() + ").");
+  Logger.log("Aucun événement trouvé pour les 4 prochains mois dans le calendrier '" + calendar.getName() + "' (ID: " + calendar.getId() + ").");
   }
 }
 
@@ -117,7 +127,7 @@ function groupeLigne(debut,fin){
   
   // Create the group
   sheet.getRange(startRow, 1, endRow - startRow + 1, 1).shiftRowGroupDepth(1);
-  sheet.collapseAllRowGroups()
+  //sheet.collapseAllRowGroups()
 }
 
 function addNotesToRange(rangeA1Notation, note) {
@@ -133,31 +143,31 @@ function addNotesToRange(rangeA1Notation, note) {
 
   // Parcourt chaque cellule de la plage
   for (let row = 1; row <= numRows; row++) {
-	let nbevent = 0;
-	let notesSet = new Set(); // Utiliser un Set pour garder trace des notes uniques
+  let nbevent = 0;
+  let notesSet = new Set(); // Utiliser un Set pour garder trace des notes uniques
 
-	for (let col = 1; col <= numCols; col++) {
-	  const cell = range.getCell(row, col);
-	  const existingNote = cell.getNote();
-	  
-	  if (existingNote) {
-		// Ajouter la note au Set
-		notesSet.add(existingNote);
-		// Mettre à jour le compteur avec le nombre total de notes uniques
-		Logger.log(cell.getValue() + 1)
-		cell.setValue(String(cell.getValue() + 1));
-	  }
-	  else{
-		cell.setValue(String(1));
-	  }
-	  
-	  const combinedNote = existingNote 
-		? `${existingNote}\n${note}\n`
-		: note;
-	  
-	  cell.setNote(combinedNote);
-	  Logger.log(`Nombre de notes: ${nbevent}`);
-	}
+  for (let col = 1; col <= numCols; col++) {
+    const cell = range.getCell(row, col);
+    const existingNote = cell.getNote();
+    
+    if (existingNote) {
+    // Ajouter la note au Set
+    notesSet.add(existingNote);
+    // Mettre à jour le compteur avec le nombre total de notes uniques
+    //Logger.log(cell.getValue() + 1)
+    cell.setValue(String(cell.getValue() + 1));
+    }
+    else{
+    cell.setValue(String(1));
+    }
+    
+    const combinedNote = existingNote 
+    ? `${existingNote}\n${note}\n`
+    : note;
+    
+    cell.setNote(combinedNote);
+    //Logger.log(`Nombre de notes: ${nbevent}`);
+  }
   }
 }
 
@@ -166,8 +176,8 @@ function getcaldata(calID, num) {
   
   // Vérifie si le calendrier est sélectionné
   if (!calendar.isSelected()) {
-	Logger.log(`Calendrier ${calID} non sélectionné - ignoré`);
-	return; // Sort de la fonction si le calendrier n'est pas sélectionné
+  Logger.log(`Calendrier ${calID} non sélectionné - ignoré`);
+  return; // Sort de la fonction si le calendrier n'est pas sélectionné
   }
 
   const calendarName = calendar.getName();
@@ -191,29 +201,29 @@ function getcaldata(calID, num) {
 function getALLcal(){
   const calendars = CalendarApp.getAllOwnedCalendars();
   for (var i = 0; i < calendars.length; i++) {
-	var calendar = calendars[i];
-	var calID = calendar.getId()
-	getcaldata(calID,i)
+  var calendar = calendars[i];
+  var calID = calendar.getId()
+  getcaldata(calID,i)
   }
   Logger.log('This user owns %s calendars.', calendars.length); 
 }
 
 function formatDateTime(date) {
-	const dateObj = new Date(date);
-	const isStartOfDay = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
+  const dateObj = new Date(date);
+  const isStartOfDay = dateObj.getHours() === 0 && dateObj.getMinutes() === 0;
 
-	const options = {
-		timeZone: 'Europe/Paris',
-		year: 'numeric',
-		month: 'long',
-		day: 'numeric',
-		...(isStartOfDay ? {} : {
-			hour: '2-digit',
-			minute: '2-digit'
-		})
-	};
+  const options = {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    ...(isStartOfDay ? {} : {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  };
 
-	return dateObj.toLocaleString('fr-FR', options);
+  return dateObj.toLocaleString('fr-FR', options);
 }
 
 function formatDate(dateString) {
@@ -249,7 +259,7 @@ function getLigneDate(numligne){
   ligne2_data = JSON.parse(jsonString);
   var emptyColumns = ["", "", "", "", ""];
   if(numligne == "2"){
-	emptyColumns = ["Calendrier", "Description", "Jour", "Lieu", "Heure"]
+  emptyColumns = ["Calendrier", "Description", "Jour", "Lieu", "Heure"]
   }
   ligne2_data = emptyColumns.concat(ligne2_data); 
 
@@ -258,10 +268,10 @@ function getLigneDate(numligne){
 
   // Check if the array is empty before appending
   if (ligne2_data && ligne2_data.length > 0) {
-	return(ligne2_data);
+  return(ligne2_data);
   } else {
-	Logger.log("Data fetched from URL is empty. Cannot append row.");
-	// You might want to throw an error or handle this case differently
+  Logger.log("Data fetched from URL is empty. Cannot append row.");
+  // You might want to throw an error or handle this case differently
   }
 }
 
@@ -296,7 +306,7 @@ function setColumnWidths() {
   
   // Parcourir toutes les colonnes à partir de F
   for (let col = startColumn; col <= lastColumn; col++) {
-	sheet.setColumnWidth(col, 28);
+  sheet.setColumnWidth(col, 28);
   }
   sheet.setColumnWidth(2,300)
 
@@ -309,6 +319,6 @@ function reset(){
   var values = sh.getDataRange().getValues();
   //Logger.log(values.length);
   for(var i=0, iLen=values.length; i<iLen; i++) {
-	sh.deleteRow(1);
+  sh.deleteRow(1);
   }
 }
