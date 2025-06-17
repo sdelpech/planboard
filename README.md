@@ -1,3 +1,6 @@
+
+![screen](https://github.com/user-attachments/assets/e8342d44-6914-4652-9e42-21f3bdb6c509)
+
 Planning Board
 
 Le script récupère les agendas cochés dans Google Calendar et génère un tableau permettant d'avoir une vue d'ensemble des événements.
