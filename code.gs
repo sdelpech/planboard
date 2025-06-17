@@ -60,115 +60,178 @@ function sheetId(){
   const sheet = SpreadsheetApp.getActiveSheet();
 }
 
-function listCalendarEventsById(calendarId,num,coul) {
+function getColumnLetter(columnNumber) {
+  let columnLetter = '';
+  while (columnNumber > 0) {
+    const remainder = (columnNumber - 1) % 26;
+    columnLetter = String.fromCharCode(65 + remainder) + columnLetter;
+    columnNumber = Math.floor((columnNumber - 1) / 26);
+  }
+  return columnLetter;
+}
+
+function translateToFrench(shortName) {
+  const translations = {
+    'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mer', 'Thu': 'Jeu', 
+    'Fri': 'Ven', 'Sat': 'Sam', 'Sun': 'Dim',
+    'Jan': 'Jan', 'Feb': 'Fév', 'Mar': 'Mar', 'Apr': 'Avr',
+    'May': 'Mai', 'Jun': 'Jui', 'Jul': 'Jui', 'Aug': 'Aoû',
+    'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Déc'
+  };
+  return translations[shortName] || shortName;
+}
+
+function generateDateLines() {
+  const today = new Date();
+  const fourMonthsLater = new Date(today);
+  fourMonthsLater.setMonth(today.getMonth() + 4);
+
+  const ligne1 = [], ligne2 = [], ligne3 = [];
+  let currentDate = new Date(today);
+  let currentMonth = currentDate.toLocaleString('en-US', { month: 'short' });
+
+  // Start from column F (6)
+  let colIndex = 6;
+  
+  while (currentDate <= fourMonthsLater) {
+    const month = currentDate.toLocaleString('en-US', { month: 'short' });
+    const day = currentDate.getDate();
+    const weekday = currentDate.toLocaleString('en-US', { weekday: 'short' });
+
+    // Ligne 1 (mois)
+    ligne1.push(currentMonth === month ? '' : 
+      translateToFrench(month) + ' ' + currentDate.getFullYear());
+    
+    // Ligne 2 (jour)
+    ligne2.push(day.toString());
+    
+    // Ligne 3 (jour de la semaine)
+    ligne3.push(translateToFrench(weekday));
+
+    currentMonth = month;
+    currentDate.setDate(currentDate.getDate() + 1);
+    colIndex++;
+  }
+
+  return {
+    ligne1: ligne1,
+    ligne2: ligne2,
+    ligne3: ligne3
+  };
+}
+
+function getLigneDate(numligne) {
+  const dateLines = generateDateLines();
+  const emptyColumns = ["", "", "", "", ""];
+  
+  if (numligne === "1") return emptyColumns.concat(dateLines.ligne1);
+  if (numligne === "2") {
+    return ["Calendrier", "Description", "Jour", "Lieu", "Heure"].concat(dateLines.ligne2);
+  }
+  if (numligne === "3") return emptyColumns.concat(dateLines.ligne3);
+  
+  return [];
+}
+
+function calculateCellRange(startDate, endDate, rowNum) {
+  const today = new Date();
+  const baseCol = 6; // Column F
+  
+  const startDays = Math.floor((startDate - today) / (1000 * 60 * 60 * 24));
+  const endDays = Math.floor((endDate - today) / (1000 * 60 * 60 * 24));
+  
+  const startCol = getColumnLetter(baseCol + startDays);
+  const endCol = getColumnLetter(baseCol + endDays);
+  
+  return `${startCol}${rowNum}:${endCol}${rowNum}`;
+}
+
+function listCalendarEventsById(calendarId, num, coul) {
   if (!calendarId) {
-  Logger.log("Erreur : Aucun ID de calendrier n'a été fourni.");
-  return;
+    Logger.log("Erreur : Aucun ID de calendrier n'a été fourni.");
+    return;
   }
   var sheet = SpreadsheetApp.getActiveSheet();
   var today = new Date();
   var fourMonthsLater = new Date();
-  fourMonthsLater.setMonth(today.getMonth() + 4); // Ajoute 4 mois à la date actuelle
-  var calendar;
-  try {
-  calendar = CalendarApp.getCalendarById(calendarId);
-  } catch (e) {
-  Logger.log("Erreur lors de la récupération du calendrier par ID: " + e.message);
-  Logger.log("Assurez-vous que l'ID est correct et que le script a les permissions d'accès à ce calendrier.");
-  return;
+  fourMonthsLater.setMonth(today.getMonth() + 4);
+  
+  var calendar = CalendarApp.getCalendarById(calendarId);
+  if (!calendar) {
+    Logger.log("Erreur : Calendrier non trouvé");
+    return;
   }
 
-  if (!calendar) {
-  Logger.log("Erreur : Le calendrier avec l'ID '" + calendarId + "' n'a pas été trouvé ou le script n'a pas les permissions nécessaires.");
-  return;
-  }
   var events = calendar.getEvents(today, fourMonthsLater);
   if (events.length > 0) {
-  //Colorise la première ligne
-  Logger.log("Colorise la première ligne du calendrier")
-  events.forEach(function(event) {
-    respcolor  = UrlFetchApp.fetch("https://winlog.iut-rodez.fr/admin/planing/ljour.php?l=s&d=" + formatDate(event.getStartTime()) + "&f=" + formatDate(event.getEndTime()) + "&r="+num)
-    rangecolor = respcolor.getContentText()
-    sheet.getRange(JSON.parse(rangecolor)).setBackgroundColor(coul);
-    var note = event.getTitle() + "\n" + formatDateTime(event.getStartTime())
-    addNotesToRange(JSON.parse(rangecolor),note)
-    Utilities.sleep(1000);
-  });
-  //
-  
-  // Repasse pour faire une ligne par évenement :
-  var ligne_debut = sheet.getLastRow() +1
+    // Préparer les données en mémoire
+    const rangesToColor = [];
+    const notesToAdd = [];
+    const rowsToAdd = [];
+    
     events.forEach(function(event) {
-      //Ajustement de la date : 
-      sheet.appendRow(["",event.getTitle(),formatDate(event.getStartTime()),event.getLocation(),formatTime(event.getStartTime())])
-      sheet.getRange("A"+sheet.getLastRow()+":E"+sheet.getLastRow()).setBackgroundColor(coul);
-      respcolor  = UrlFetchApp.fetch("https://winlog.iut-rodez.fr/admin/planing/ljour.php?l=s&d=" + formatDate(event.getStartTime()) + "&f=" + formatDate(event.getEndTime()) + "&r="+sheet.getLastRow())
-      respcolor = respcolor.getContentText()
-      Logger.log(respcolor)
-      sheet.getRange(JSON.parse(respcolor)).setBackgroundColor(coul);
-      Utilities.sleep(900);
+      const range = calculateCellRange(event.getStartTime(), event.getEndTime(), num);
+      rangesToColor.push({
+        range: range,
+        note: event.getTitle() + "\n" + formatDateTime(event.getStartTime())
+      });
+      
+      rowsToAdd.push({
+        data: ["", event.getTitle(), formatDate(event.getStartTime()), 
+               event.getLocation(), formatTime(event.getStartTime())],
+        startDate: event.getStartTime(),
+        endDate: event.getEndTime()
+      });
     });
-  var ligne_fin = sheet.getLastRow()
-  groupeLigne(ligne_debut,ligne_fin)
-  var range = sheet.getRange("A"+ ligne_debut+":E"+ligne_fin); 
-  range.setHorizontalAlignment("left")
-  
-  } else {
-  Logger.log("Aucun événement trouvé pour les 4 prochains mois dans le calendrier '" + calendar.getName() + "' (ID: " + calendar.getId() + ").");
-  }
-}
 
-function groupeLigne(debut,fin){
-  var sheet = SpreadsheetApp.getActiveSheet();
-  
-  // Specify the rows to group (for example, rows 2 to 5)
-  var startRow = debut;
-  var endRow = fin;
-  
-  // Create the group
-  sheet.getRange(startRow, 1, endRow - startRow + 1, 1).shiftRowGroupDepth(1);
-  //sheet.collapseAllRowGroups()
+    // Appliquer les couleurs et notes en batch
+    rangesToColor.forEach(({range, note}) => {
+      sheet.getRange(range).setBackgroundColor(coul);
+      addNotesToRange(range, note);
+    });
+
+    // Ajouter toutes les lignes en une seule fois
+    const ligne_debut = sheet.getLastRow() + 1;
+    const rowsData = rowsToAdd.map(row => row.data);
+    sheet.getRange(ligne_debut, 1, rowsData.length, 5).setValues(rowsData);
+    
+    // Colorer toutes les nouvelles lignes en une fois
+    sheet.getRange(ligne_debut, 1, rowsData.length, 5).setBackgroundColor(coul);
+
+    // Colorer les cellules de dates pour chaque ligne de détail
+    rowsToAdd.forEach((row, index) => {
+      const rowNum = ligne_debut + index;
+      const dateRange = calculateCellRange(row.startDate, row.endDate, rowNum);
+      sheet.getRange(dateRange).setBackgroundColor(coul);
+    });
+
+    // Grouper les lignes
+    const ligne_fin = ligne_debut + rowsData.length - 1;
+    groupeLigne(ligne_debut, ligne_fin);
+    sheet.getRange(`A${ligne_debut}:E${ligne_fin}`).setHorizontalAlignment("left");
+  }
 }
 
 function addNotesToRange(rangeA1Notation, note) {
-  Logger.log(rangeA1Notation)
-  var sheet = SpreadsheetApp.getActiveSheet();
-  
-  // Récupère la plage de cellules à partir de la notation A1
+  const sheet = SpreadsheetApp.getActiveSheet();
   const range = sheet.getRange(rangeA1Notation);
-  
-  // Récupère toutes les cellules de la plage
-  const numRows = range.getNumRows();
-  const numCols = range.getNumColumns();
+  const values = range.getValues();
+  const notes = range.getNotes();
+  const newValues = [];
+  const newNotes = [];
 
-  // Parcourt chaque cellule de la plage
-  for (let row = 1; row <= numRows; row++) {
-  let nbevent = 0;
-  let notesSet = new Set(); // Utiliser un Set pour garder trace des notes uniques
+  for (let i = 0; i < values.length; i++) {
+    newValues[i] = [];
+    newNotes[i] = [];
+    for (let j = 0; j < values[i].length; j++) {
+      const existingNote = notes[i][j];
+      newValues[i][j] = existingNote ? String(Number(values[i][j] || 0) + 1) : "1";
+      newNotes[i][j] = existingNote ? `${existingNote}\n${note}\n` : note;
+    }
+  }
 
-  for (let col = 1; col <= numCols; col++) {
-    const cell = range.getCell(row, col);
-    const existingNote = cell.getNote();
-    
-    if (existingNote) {
-    // Ajouter la note au Set
-    notesSet.add(existingNote);
-    // Mettre à jour le compteur avec le nombre total de notes uniques
-    //Logger.log(cell.getValue() + 1)
-    cell.setValue(String(cell.getValue() + 1));
-    }
-    else{
-    cell.setValue(String(1));
-    }
-    
-    const combinedNote = existingNote 
-    ? `${existingNote}\n${note}\n`
-    : note;
-    
-    cell.setNote(combinedNote);
-    //Logger.log(`Nombre de notes: ${nbevent}`);
-  }
-  }
+  range.setValues(newValues);
+  range.setNotes(newNotes);
 }
 
 function getcaldata(calID, num) {
@@ -198,14 +261,22 @@ function getcaldata(calID, num) {
   Logger.log(listCalendarEventsById(calID, num, calendarColor));
 }
 
-function getALLcal(){
-  const calendars = CalendarApp.getAllOwnedCalendars();
-  for (var i = 0; i < calendars.length; i++) {
-  var calendar = calendars[i];
-  var calID = calendar.getId()
-  getcaldata(calID,i)
-  }
-  Logger.log('This user owns %s calendars.', calendars.length); 
+function getALLcal() {
+  const calendars = CalendarApp.getAllOwnedCalendars().filter(cal => cal.isSelected());
+  const sheet = SpreadsheetApp.getActiveSheet();
+  
+  calendars.forEach((calendar, index) => {
+    const calendarName = calendar.getName();
+    const calendarDesc = calendar.getDescription();
+    const calendarColor = calendar.getColor();
+    const rowNum = sheet.getLastRow() + 1;
+    
+    sheet.getRange(`A${rowNum}:E${rowNum}`)
+         .setBackgroundColor(calendarColor);
+    sheet.appendRow([calendarName, calendarDesc]);
+    
+    listCalendarEventsById(calendar.getId(), rowNum, calendarColor);
+  });
 }
 
 function formatDateTime(date) {
@@ -244,36 +315,18 @@ function formatTime(dateString) {
 
   return `${hours}:${minutes}`;
 }
-
-function getLigneDate(numligne){
-
-  var response = UrlFetchApp.fetch("https://winlog.iut-rodez.fr/admin/planing/ljour.php?l="+numligne);
-
-  // Get the content of the response as a string
-  var jsonString = response.getContentText();
-
-  var ligne2_data;
-
-  // Parse the JSON string into a JavaScript array
-  // The PHP script directly outputs the array, so no ".result" is needed
-  ligne2_data = JSON.parse(jsonString);
-  var emptyColumns = ["", "", "", "", ""];
-  if(numligne == "2"){
-  emptyColumns = ["Calendrier", "Description", "Jour", "Lieu", "Heure"]
-  }
-  ligne2_data = emptyColumns.concat(ligne2_data); 
-
-  // Log the parsed data to see what you received
-  Logger.log("Parsed data: " + JSON.stringify(ligne2_data));
-
-  // Check if the array is empty before appending
-  if (ligne2_data && ligne2_data.length > 0) {
-  return(ligne2_data);
-  } else {
-  Logger.log("Data fetched from URL is empty. Cannot append row.");
-  // You might want to throw an error or handle this case differently
-  }
+function groupeLigne(debut,fin){
+  var sheet = SpreadsheetApp.getActiveSheet();
+  
+  // Specify the rows to group (for example, rows 2 to 5)
+  var startRow = debut;
+  var endRow = fin;
+  
+  // Create the group
+  sheet.getRange(startRow, 1, endRow - startRow + 1, 1).shiftRowGroupDepth(1);
+  sheet.collapseAllRowGroups()
 }
+
 
 function gooddate(datepasgood){
   //Date vs Heure
@@ -314,11 +367,13 @@ function setColumnWidths() {
   sheet.setColumnWidth(5,50)
 }
 
-function reset(){
-  var sh = SpreadsheetApp.getActiveSheet();
-  var values = sh.getDataRange().getValues();
-  //Logger.log(values.length);
-  for(var i=0, iLen=values.length; i<iLen; i++) {
-  sh.deleteRow(1);
+function reset() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const lastRow = sheet.getLastRow();
+  
+  // Si il y a des lignes à supprimer
+  if (lastRow > 0) {
+    // Supprime toutes les lignes en une seule opération
+    sheet.deleteRows(1, lastRow);
   }
 }
