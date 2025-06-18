@@ -26,7 +26,9 @@ function onOpen() {
     .addSeparator()
     .addSubMenu(ui.createMenu('Affichage')
       .addItem('Étendre tous les groupes', 'expandAllGroups')
-      .addItem('Regrouper tous les groupes', 'collapseAllGroups'))
+      .addItem('Regrouper tous les groupes', 'collapseAllGroups')
+      .addSeparator()
+      .addItem('Aller à aujourd\'hui', 'scrollToToday'))
     .addToUi();
 }
 
@@ -74,6 +76,21 @@ function ajout_lignes_debut(){
   sheet.appendRow(getLigneDate("2"));
   sheet.appendRow(getLigneDate("3"));
 
+  // Griser les weekends
+  const dateLines = generateDateLines();
+  dateLines.weekendColumns.forEach(index => {
+    const column = 6 + index; // 6 est la colonne de base (F)
+    const range = sheet.getRange(3, column, sheet.getMaxRows(), 1);
+    range.setBackgroundColor('#f3f3f3');
+  });
+
+  // Ajouter les bordures verticales pour les débuts de mois (par dessus le gris)
+  dateLines.monthStartColumns.forEach(index => {
+    const column = 6 + index;
+    const range = sheet.getRange(1, column, sheet.getMaxRows(), 1);
+    range.setBorder(null, true, null, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+  });
+
   //Alignement dans les cellules
   var range = sheet.getDataRange(); 
   // Set horizontal alignment to LEFT for all cells in that range
@@ -107,9 +124,9 @@ function translateToFrench(shortName) {
   const translations = {
     'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mer', 'Thu': 'Jeu', 
     'Fri': 'Ven', 'Sat': 'Sam', 'Sun': 'Dim',
-    'Jan': 'Jan', 'Feb': 'Fév', 'Mar': 'Mar', 'Apr': 'Avr',
-    'May': 'Mai', 'Jun': 'Jui', 'Jul': 'Jui', 'Aug': 'Aoû',
-    'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Déc'
+    'Jan': 'Janvier', 'Feb': 'Février', 'Mar': 'Mars', 'Apr': 'Avril',
+    'May': 'Mai', 'Jun': 'Juin', 'Jul': 'Juillet', 'Aug': 'Août',
+    'Sep': 'Septembre', 'Oct': 'Octobre', 'Nov': 'Novembre', 'Dec': 'Décembre'
   };
   return translations[shortName] || shortName;
 }
@@ -124,32 +141,43 @@ function generateDateLines() {
     : new Date(startDate.getTime() + (4 * 30 * 24 * 60 * 60 * 1000));
 
   const ligne1 = [], ligne2 = [], ligne3 = [];
+  const monthStartColumns = []; // Indices des débuts de mois
+  const weekendColumns = []; // Ajouter un tableau pour les colonnes de weekend
   let currentDate = new Date(startDate);
-  let currentMonth = currentDate.toLocaleString('en-US', { month: 'short' });
+  let currentMonth = currentDate.getMonth();
+  let dayIndex = 0;
 
   while (currentDate <= endDate) {
+    // Détecter le weekend (6 = samedi, 0 = dimanche)
+    if (currentDate.getDay() === 6 || currentDate.getDay() === 0) {
+      weekendColumns.push(dayIndex);
+    }
+
+    // Détecter le premier jour du mois
+    if (currentDate.getDate() === 1 || dayIndex === 0) {
+      monthStartColumns.push(dayIndex);
+    }
+
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const day = currentDate.getDate();
     const weekday = currentDate.toLocaleString('en-US', { weekday: 'short' });
 
-    // Ligne 1 (mois) - Toujours afficher le mois au premier jour
-    ligne1.push(day === 1 || currentMonth !== month 
+    ligne1.push(day === 1 || currentMonth !== currentDate.getMonth() 
       ? translateToFrench(month) + ' ' + currentDate.getFullYear()
       : '');
-    
     ligne2.push(day.toString());
     ligne3.push(translateToFrench(weekday));
 
-    currentMonth = month;
+    currentMonth = currentDate.getMonth();
     currentDate.setDate(currentDate.getDate() + 1);
+    dayIndex++;
   }
 
   return {
-    ligne1: ligne1,
-    ligne2: ligne2,
-    ligne3: ligne3,
-    startDate: startDate,
-    endDate: endDate
+    ligne1, ligne2, ligne3,
+    startDate, endDate,
+    monthStartColumns,
+    weekendColumns // Ajouter les colonnes de weekend au retour
   };
 }
 
@@ -439,4 +467,26 @@ function reset() {
     // Supprime toutes les lignes en une seule opération
     sheet.deleteRows(1, lastRow);
   }
+}
+
+function scrollToToday() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const props = PropertiesService.getDocumentProperties();
+  const startDate = new Date(props.getProperty('startDate'));
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  // Calculer le nombre de jours depuis la date de début
+  const diffDays = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+  
+  // Calculer combien de colonnes sont visibles en moyenne dans la vue
+  // On prend une estimation de 15 colonnes visibles en moyenne
+  const visibleColumns = 15;
+  const offset = Math.floor(visibleColumns / 2);
+  
+  // Calculer la colonne correspondante avec l'offset
+  const todayColumn = Math.max(6, 6 + diffDays - offset);
+  
+  // Faire défiler jusqu'à la colonne calculée
+  sheet.setActiveRange(sheet.getRange(1, todayColumn));
 }
