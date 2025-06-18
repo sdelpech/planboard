@@ -1,6 +1,17 @@
-function lance_script(){
-  onOpen()
+function lance_script(startDate = new Date(), endDate = null){
   SpreadsheetApp.getActive().toast('Mise à jour en cours...', 'Status', -1);
+  
+  if (!endDate) {
+    endDate = new Date(startDate);
+    endDate.setMonth(startDate.getMonth() + 4);
+  }
+  
+  // Stocker les dates dans les propriétés du document
+  PropertiesService.getDocumentProperties().setProperties({
+    'startDate': startDate.toISOString(),
+    'endDate': endDate.toISOString()
+  });
+  
   ajout_lignes_debut()
   var sheet = SpreadsheetApp.getActiveSheet();
   getALLcal()
@@ -8,14 +19,33 @@ function lance_script(){
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi()
-  .createMenu('IUT Planning')
-  .addItem('Rafraichir', 'lance_script')
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('IUT Planning')
+    .addItem('Rafraichir (4 mois)', 'lance_script')
+    .addItem('Afficher année scolaire...', 'showYearPickerDialog')
     .addSeparator()
-    .addSubMenu(SpreadsheetApp.getUi().createMenu('Affichage')
+    .addSubMenu(ui.createMenu('Affichage')
       .addItem('Étendre tous les groupes', 'expandAllGroups')
       .addItem('Regrouper tous les groupes', 'collapseAllGroups'))
     .addToUi();
+}
+
+function showYearPickerDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.prompt(
+    'Année scolaire',
+    'Entrez l\'année de début (ex: 2024 pour 2024-2025)',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (result.getSelectedButton() == ui.Button.OK) {
+    const year = parseInt(result.getResponseText());
+    if (!isNaN(year)) {
+      const startDate = new Date(year, 8, 1); // 1er septembre
+      const endDate = new Date(year + 1, 7, 31); // 31 août
+      lance_script(startDate, endDate);
+    }
+  }
 }
 
 function expandAllGroups() {
@@ -29,17 +59,20 @@ function collapseAllGroups() {
 }
 
 function ajout_lignes_debut(){
-  var aujourdhui = new Date();
-  var datedujour = aujourdhui.toISOString();
-  datedujour = gooddate(datedujour)
+  const props = PropertiesService.getDocumentProperties();
   reset();
   var sheet = SpreadsheetApp.getActiveSheet();
-  sheet.appendRow(["Dernière actualisation : " + datedujour])
-  sheet.appendRow(["--------------------------------------"])
-  // recuperation des lignes de dates
-  sheet.appendRow(getLigneDate("1"))
-  sheet.appendRow(getLigneDate("2"))
-  sheet.appendRow(getLigneDate("3"))
+  
+  // Déterminer si on est en mode année scolaire ou 4 mois
+  const endDate = props.getProperty('endDate');
+  const isYearMode = endDate && new Date(endDate).getMonth() === 7; // Vérifie si la date de fin est en août
+  const titre = isYearMode ? "Planning annuel" : "Planning à 4 mois";
+  
+  sheet.appendRow(["Dernière actualisation : " + new Date().toLocaleString('fr-FR')]);
+  sheet.appendRow([titre]);
+  sheet.appendRow(getLigneDate("1"));
+  sheet.appendRow(getLigneDate("2"));
+  sheet.appendRow(getLigneDate("3"));
 
   //Alignement dans les cellules
   var range = sheet.getDataRange(); 
@@ -82,41 +115,41 @@ function translateToFrench(shortName) {
 }
 
 function generateDateLines() {
-  const today = new Date();
-  const fourMonthsLater = new Date(today);
-  fourMonthsLater.setMonth(today.getMonth() + 4);
+  const props = PropertiesService.getDocumentProperties();
+  const startDate = props.getProperty('startDate') 
+    ? new Date(props.getProperty('startDate')) 
+    : new Date(new Date().setHours(0,0,0,0));
+  const endDate = props.getProperty('endDate') 
+    ? new Date(props.getProperty('endDate')) 
+    : new Date(startDate.getTime() + (4 * 30 * 24 * 60 * 60 * 1000));
 
   const ligne1 = [], ligne2 = [], ligne3 = [];
-  let currentDate = new Date(today);
+  let currentDate = new Date(startDate);
   let currentMonth = currentDate.toLocaleString('en-US', { month: 'short' });
 
-  // Start from column F (6)
-  let colIndex = 6;
-  
-  while (currentDate <= fourMonthsLater) {
+  while (currentDate <= endDate) {
     const month = currentDate.toLocaleString('en-US', { month: 'short' });
     const day = currentDate.getDate();
     const weekday = currentDate.toLocaleString('en-US', { weekday: 'short' });
 
-    // Ligne 1 (mois)
-    ligne1.push(currentMonth === month ? '' : 
-      translateToFrench(month) + ' ' + currentDate.getFullYear());
+    // Ligne 1 (mois) - Toujours afficher le mois au premier jour
+    ligne1.push(day === 1 || currentMonth !== month 
+      ? translateToFrench(month) + ' ' + currentDate.getFullYear()
+      : '');
     
-    // Ligne 2 (jour)
     ligne2.push(day.toString());
-    
-    // Ligne 3 (jour de la semaine)
     ligne3.push(translateToFrench(weekday));
 
     currentMonth = month;
     currentDate.setDate(currentDate.getDate() + 1);
-    colIndex++;
   }
 
   return {
     ligne1: ligne1,
     ligne2: ligne2,
-    ligne3: ligne3
+    ligne3: ligne3,
+    startDate: startDate,
+    endDate: endDate
   };
 }
 
@@ -133,36 +166,54 @@ function getLigneDate(numligne) {
   return [];
 }
 
-function calculateCellRange(startDate, endDate, rowNum) {
-  const today = new Date();
-  const baseCol = 6; // Column F
+function calculateCellRange(eventStartDate, eventEndDate, rowNum) {
+  const props = PropertiesService.getDocumentProperties();
+  const referenceDate = props.getProperty('startDate') 
+    ? new Date(props.getProperty('startDate')) 
+    : new Date(new Date().setHours(0,0,0,0));
+
+  const baseCol = 6;
   
-  const startDays = Math.floor((startDate - today) / (1000 * 60 * 60 * 24));
-  const endDays = Math.floor((endDate - today) / (1000 * 60 * 60 * 24));
+  // Créer des dates en début de journée pour la comparaison
+  const eventStart = new Date(eventStartDate);
+  eventStart.setHours(0,0,0,0);
   
-  const startCol = getColumnLetter(baseCol + startDays);
-  const endCol = getColumnLetter(baseCol + endDays);
+  // Si l'événement se termine à minuit, reculer d'un jour
+  const eventEnd = new Date(eventEndDate);
+  if (eventEnd.getHours() === 0 && eventEnd.getMinutes() === 0) {
+    eventEnd.setDate(eventEnd.getDate() - 1);
+  }
+  eventEnd.setHours(0,0,0,0);
+  
+  const refDate = new Date(referenceDate);
+  refDate.setHours(0,0,0,0);
+  
+  // Calculer la différence en jours sans tenir compte des heures
+  const startDays = Math.floor((eventStart - refDate) / (1000 * 60 * 60 * 24));
+  const endDays = Math.floor((eventEnd - refDate) / (1000 * 60 * 60 * 24)); // Corrigé refRefDate en refDate
+  
+  // S'assurer que l'événement est dans la période affichée
+  if (startDays < -1) return null;
+  
+  // Ajuster les colonnes
+  const startCol = getColumnLetter(baseCol + Math.max(0, startDays));
+  const endCol = getColumnLetter(baseCol + Math.max(0, endDays));
   
   return `${startCol}${rowNum}:${endCol}${rowNum}`;
 }
 
 function listCalendarEventsById(calendarId, num, coul) {
-  if (!calendarId) {
-    Logger.log("Erreur : Aucun ID de calendrier n'a été fourni.");
-    return;
-  }
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var today = new Date();
-  var fourMonthsLater = new Date();
-  fourMonthsLater.setMonth(today.getMonth() + 4);
+  if (!calendarId) return;
   
-  var calendar = CalendarApp.getCalendarById(calendarId);
-  if (!calendar) {
-    Logger.log("Erreur : Calendrier non trouvé");
-    return;
-  }
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const props = PropertiesService.getDocumentProperties();
+  const startDate = new Date(props.getProperty('startDate') || new Date());
+  const endDate = new Date(props.getProperty('endDate') || new Date(startDate.getTime() + (4 * 30 * 24 * 60 * 60 * 1000)));
+  
+  const calendar = CalendarApp.getCalendarById(calendarId);
+  if (!calendar) return;
 
-  var events = calendar.getEvents(today, fourMonthsLater);
+  const events = calendar.getEvents(startDate, endDate);
   if (events.length > 0) {
     // Préparer les données en mémoire
     const rangesToColor = [];
@@ -171,17 +222,19 @@ function listCalendarEventsById(calendarId, num, coul) {
     
     events.forEach(function(event) {
       const range = calculateCellRange(event.getStartTime(), event.getEndTime(), num);
-      rangesToColor.push({
-        range: range,
-        note: event.getTitle() + "\n" + formatDateTime(event.getStartTime())
-      });
-      
-      rowsToAdd.push({
-        data: ["", event.getTitle(), formatDate(event.getStartTime()), 
-               event.getLocation(), formatTime(event.getStartTime())],
-        startDate: event.getStartTime(),
-        endDate: event.getEndTime()
-      });
+      if (range) {  // Vérifier si la plage est valide
+        rangesToColor.push({
+          range: range,
+          note: event.getTitle() + "\n" + formatDateTime(event.getStartTime())
+        });
+        
+        rowsToAdd.push({
+          data: ["", event.getTitle(), formatDate(event.getStartTime()), 
+                 event.getLocation(), formatTime(event.getStartTime())],
+          startDate: event.getStartTime(),
+          endDate: event.getEndTime()
+        });
+      }
     });
 
     // Appliquer les couleurs et notes en batch
@@ -213,6 +266,8 @@ function listCalendarEventsById(calendarId, num, coul) {
 }
 
 function addNotesToRange(rangeA1Notation, note) {
+  if (!rangeA1Notation) return;
+  
   const sheet = SpreadsheetApp.getActiveSheet();
   const range = sheet.getRange(rangeA1Notation);
   const values = range.getValues();
@@ -224,9 +279,17 @@ function addNotesToRange(rangeA1Notation, note) {
     newValues[i] = [];
     newNotes[i] = [];
     for (let j = 0; j < values[i].length; j++) {
+      const existingValue = values[i][j] || "0";
       const existingNote = notes[i][j];
-      newValues[i][j] = existingNote ? String(Number(values[i][j] || 0) + 1) : "1";
-      newNotes[i][j] = existingNote ? `${existingNote}\n${note}\n` : note;
+      
+      // Incrémenter le compteur ou initialiser à 1
+      const currentCount = parseInt(existingValue) || 0;
+      newValues[i][j] = String(currentCount + 1);
+      
+      // Ajouter la nouvelle note
+      newNotes[i][j] = existingNote 
+        ? `${existingNote}\n${note}`
+        : note;
     }
   }
 
@@ -300,11 +363,11 @@ function formatDateTime(date) {
 function formatDate(dateString) {
   const date = new Date(dateString);
   
-  const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
 
-  return `${month}/${day}/${year}`;
+  return `${day}/${month}/${year}`;
 }
 
 function formatTime(dateString) {
