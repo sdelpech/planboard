@@ -23,13 +23,66 @@ function onOpen() {
   ui.createMenu('IUT Planning')
     .addItem('Rafraichir (4 mois)', 'lance_script')
     .addItem('Afficher année scolaire...', 'showYearPickerDialog')
+    .addItem('Sélectionner une plage de dates...', 'showDateRangePickerDialog')
     .addSeparator()
     .addSubMenu(ui.createMenu('Affichage')
       .addItem('Étendre tous les groupes', 'expandAllGroups')
       .addItem('Regrouper tous les groupes', 'collapseAllGroups')
       .addSeparator()
-      .addItem('Aller à aujourd\'hui', 'scrollToToday'))
+      .addItem('Aller à aujourd\'hui', 'detectAndScrollToToday'))
     .addToUi();
+}
+
+function detectAndScrollToToday() {
+  const html = HtmlService.createHtmlOutput(`
+    <script>
+      const width = window.innerWidth;
+      google.script.run
+        .withSuccessHandler(() => google.script.host.close())
+        .processWindowWidthAndScroll(width);
+    </script>
+  `)
+  .setWidth(1)
+  .setHeight(1);
+  
+  SpreadsheetApp.getUi().showModalDialog(html, 'Chargement...');
+}
+
+function processWindowWidthAndScroll(width) {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const props = PropertiesService.getDocumentProperties();
+  const startDate = new Date(props.getProperty('startDate'));
+  const today = new Date();
+  
+  // S'assurer que les deux dates sont au début de la journée pour une comparaison correcte
+  startDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  
+  // Calculer le nombre de jours depuis la date de début
+  const diffDays = Math.round((today - startDate) / (1000 * 60 * 60 * 24));
+  
+  // Obtenir la largeur totale des colonnes fixes (A à E)
+  const fixedWidth = [
+    sheet.getColumnWidth(1),
+    sheet.getColumnWidth(2),
+    sheet.getColumnWidth(3),
+    sheet.getColumnWidth(4),
+    sheet.getColumnWidth(5)
+  ].reduce((sum, w) => sum + w, 0);
+  
+  // Largeur standard d'une colonne de date (28px)
+  const dateColumnWidth = 28;
+  
+  // Calculer le nombre de colonnes visibles
+  const visibleWidth = width - fixedWidth;
+  const visibleDateColumns = Math.floor(visibleWidth / dateColumnWidth);
+  
+  // Calculer la colonne cible
+  const offset = Math.floor(visibleDateColumns);
+  const todayColumn = Math.max(6, 6 + diffDays - offset);
+  
+  // Faire défiler jusqu'à la colonne calculée
+  sheet.setActiveRange(sheet.getRange(1, todayColumn));
 }
 
 function showYearPickerDialog() {
@@ -65,10 +118,24 @@ function ajout_lignes_debut(){
   reset();
   var sheet = SpreadsheetApp.getActiveSheet();
   
-  // Déterminer si on est en mode année scolaire ou 4 mois
-  const endDate = props.getProperty('endDate');
-  const isYearMode = endDate && new Date(endDate).getMonth() === 7; // Vérifie si la date de fin est en août
-  const titre = isYearMode ? "Planning annuel" : "Planning à 4 mois";
+  // Déterminer le type de planning et le titre
+  const startDateStr = props.getProperty('startDate');
+  const endDateStr = props.getProperty('endDate');
+  const startDate = new Date(startDateStr);
+  const endDate = new Date(endDateStr);
+  
+  // Formater les dates pour l'affichage
+  const formatDateFr = (date) => date.toLocaleDateString('fr-FR', { 
+    day: '2-digit', 
+    month: '2-digit',
+    year: 'numeric'
+  });
+
+  // Déterminer si on est en mode année scolaire ou plage personnalisée
+  const isYearMode = endDate.getMonth() === 7; // Vérifie si la date de fin est en août
+  const titre = isYearMode 
+    ? "Planning annuel"
+    : `Planning du ${formatDateFr(startDate)} au ${formatDateFr(endDate)}`;
   
   sheet.appendRow(["Dernière actualisation : " + new Date().toLocaleString('fr-FR')]);
   sheet.appendRow([titre]);
@@ -218,7 +285,7 @@ function calculateCellRange(eventStartDate, eventEndDate, rowNum) {
   
   // Calculer la différence en jours sans tenir compte des heures
   const startDays = Math.floor((eventStart - refDate) / (1000 * 60 * 60 * 24));
-  const endDays = Math.floor((eventEnd - refDate) / (1000 * 60 * 60 * 24)); // Corrigé refRefDate en refDate
+  const endDays = Math.floor((eventEnd - refDate) / (1000 * 60 * 60 * 24)); // Correction: refRefDate -> refDate
   
   // S'assurer que l'événement est dans la période affichée
   if (startDays < -1) return null;
@@ -352,6 +419,7 @@ function getcaldata(calID, num) {
   Logger.log(listCalendarEventsById(calID, num, calendarColor));
 }
 
+
 function getALLcal() {
   const calendars = CalendarApp.getAllOwnedCalendars().filter(cal => cal.isSelected());
   const sheet = SpreadsheetApp.getActiveSheet();
@@ -368,6 +436,7 @@ function getALLcal() {
     
     listCalendarEventsById(calendar.getId(), rowNum, calendarColor);
   });
+
 }
 
 function formatDateTime(date) {
@@ -459,34 +528,94 @@ function setColumnWidths() {
 }
 
 function reset() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const lastRow = sheet.getLastRow();
+
+  const ss = SpreadsheetApp.getActive();
+  const oldSheet = ss.getActiveSheet();
+  const oldSheetName = oldSheet.getName();
   
-  // Si il y a des lignes à supprimer
-  if (lastRow > 0) {
-    // Supprime toutes les lignes en une seule opération
-    sheet.deleteRows(1, lastRow);
-  }
+  // Créer une nouvelle feuille
+  const newSheet = ss.insertSheet(oldSheetName + '_new');
+  
+  // Activer la nouvelle feuille
+  newSheet.activate();
+  
+  // Supprimer l'ancienne feuille
+  ss.deleteSheet(oldSheet);
+  
+  // Renommer la nouvelle feuille
+  newSheet.setName(oldSheetName);
 }
 
-function scrollToToday() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const props = PropertiesService.getDocumentProperties();
-  const startDate = new Date(props.getProperty('startDate'));
-  const today = new Date();
-  today.setHours(0,0,0,0);
+function showDateRangePickerDialog() {
+  const html = HtmlService.createHtmlOutput(`
+    <style>
+      .date-container {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        min-width: 0; /* Empêche le débordement des flex items */
+      }
+      .date-field {
+        flex: 1;
+        min-width: 0; /* Permet aux champs de rétrécir si nécessaire */
+        overflow: hidden; /* Contient les débordements */
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        white-space: nowrap; /* Empêche le retour à la ligne du texte */
+      }
+      input[type="date"] {
+        width: 100%;
+        padding: 5px;
+        box-sizing: border-box; /* Inclut padding dans la largeur totale */
+      }
+      input[type="button"] {
+        width: 100%;
+        padding: 8px;
+        cursor: pointer;
+      }
+    </style>
+    <form>
+      <div class="date-container">
+        <div class="date-field">
+          <label>Date de début:</label>
+          <input type="date" id="startDate" required>
+        </div>
+        <div class="date-field">
+          <label>Date de fin:</label>
+          <input type="date" id="endDate" required>
+        </div>
+      </div>
+      <input type="button" value="Valider" onclick="submitDates()">
+    </form>
+    <script>
+      function submitDates() {
+        var startDate = document.getElementById('startDate').value;
+        var endDate = document.getElementById('endDate').value;
+        if (startDate && endDate) {
+          google.script.run
+            .withSuccessHandler(function() {
+              google.script.host.close();
+            })
+            .withFailureHandler(function(error) {
+              console.error('Erreur:', error);
+              google.script.host.close();
+            })
+            .processCustomDateRange(startDate, endDate);
+        }
+      }
+    </script>
+  `)
+  .setWidth(400)
+  .setHeight(150)
+  .setTitle('Sélectionner une plage de dates');
   
-  // Calculer le nombre de jours depuis la date de début
-  const diffDays = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
-  
-  // Calculer combien de colonnes sont visibles en moyenne dans la vue
-  // On prend une estimation de 15 colonnes visibles en moyenne
-  const visibleColumns = 15;
-  const offset = Math.floor(visibleColumns / 2);
-  
-  // Calculer la colonne correspondante avec l'offset
-  const todayColumn = Math.max(6, 6 + diffDays - offset);
-  
-  // Faire défiler jusqu'à la colonne calculée
-  sheet.setActiveRange(sheet.getRange(1, todayColumn));
+  SpreadsheetApp.getUi().showModalDialog(html, 'Sélectionner une plage de dates');
+}
+
+function processCustomDateRange(startDateStr, endDateStr) {
+  const startDate = new Date(startDateStr);
+  const endDate = new Date(endDateStr);
+  lance_script(startDate, endDate);
 }
