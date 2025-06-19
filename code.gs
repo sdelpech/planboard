@@ -1,5 +1,6 @@
 function lance_script(startDate = new Date(), endDate = null){
-  SpreadsheetApp.getActive().toast('Mise à jour en cours...', 'Status', -1);
+  const ss = SpreadsheetApp.getActive();
+  ss.toast('Initialisation...', 'Status', -1);
   
   if (!endDate) {
     endDate = new Date(startDate);
@@ -12,10 +13,13 @@ function lance_script(startDate = new Date(), endDate = null){
     'endDate': endDate.toISOString()
   });
   
-  ajout_lignes_debut()
-  var sheet = SpreadsheetApp.getActiveSheet();
-  getALLcal()
-  SpreadsheetApp.getActive().toast('Mise à jour terminée !', 'Status', 3);
+  ss.toast('Préparation de la feuille...', 'Status', -1);
+  ajout_lignes_debut();
+  
+  ss.toast('Chargement des calendriers...', 'Status', -1);
+  getALLcal();
+  
+  ss.toast('Mise à jour terminée !', 'Status', 3);
 }
 
 function onOpen() {
@@ -297,146 +301,158 @@ function calculateCellRange(eventStartDate, eventEndDate, rowNum) {
   return `${startCol}${rowNum}:${endCol}${rowNum}`;
 }
 
-function listCalendarEventsById(calendarId, num, coul) {
-  if (!calendarId) return;
-  
+function getALLcal() {
   const sheet = SpreadsheetApp.getActiveSheet();
+  const ss = SpreadsheetApp.getActive();
   const props = PropertiesService.getDocumentProperties();
   const startDate = new Date(props.getProperty('startDate') || new Date());
   const endDate = new Date(props.getProperty('endDate') || new Date(startDate.getTime() + (4 * 30 * 24 * 60 * 60 * 1000)));
   
-  const calendar = CalendarApp.getCalendarById(calendarId);
-  if (!calendar) return;
-
-  const events = calendar.getEvents(startDate, endDate);
-  if (events.length > 0) {
-    // Préparer les données en mémoire
-    const rangesToColor = [];
-    const notesToAdd = [];
-    const rowsToAdd = [];
-    
-    events.forEach(function(event) {
-      const range = calculateCellRange(event.getStartTime(), event.getEndTime(), num);
-      if (range) {  // Vérifier si la plage est valide
-        rangesToColor.push({
-          range: range,
-          note: event.getTitle() + "\n" + formatDateTime(event.getStartTime())
-        });
-        
-        rowsToAdd.push({
-          data: ["", event.getTitle(), formatDate(event.getStartTime()), 
-                 event.getLocation(), formatTime(event.getStartTime())],
-          startDate: event.getStartTime(),
-          endDate: event.getEndTime()
-        });
-      }
-    });
-
-    // Appliquer les couleurs et notes en batch
-    rangesToColor.forEach(({range, note}) => {
-      sheet.getRange(range).setBackgroundColor(coul);
-      addNotesToRange(range, note);
-    });
-
-    // Ajouter toutes les lignes en une seule fois
-    const ligne_debut = sheet.getLastRow() + 1;
-    const rowsData = rowsToAdd.map(row => row.data);
-    sheet.getRange(ligne_debut, 1, rowsData.length, 5).setValues(rowsData);
-    
-    // Colorer toutes les nouvelles lignes en une fois
-    sheet.getRange(ligne_debut, 1, rowsData.length, 5).setBackgroundColor(coul);
-
-    // Colorer les cellules de dates pour chaque ligne de détail
-    rowsToAdd.forEach((row, index) => {
-      const rowNum = ligne_debut + index;
-      const dateRange = calculateCellRange(row.startDate, row.endDate, rowNum);
-      sheet.getRange(dateRange).setBackgroundColor(coul);
-    });
-
-    // Grouper les lignes
-    const ligne_fin = ligne_debut + rowsData.length - 1;
-    groupeLigne(ligne_debut, ligne_fin);
-    sheet.getRange(`A${ligne_debut}:E${ligne_fin}`).setHorizontalAlignment("left");
-  }
-}
-
-function addNotesToRange(rangeA1Notation, note) {
-  if (!rangeA1Notation) return;
-  
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const range = sheet.getRange(rangeA1Notation);
-  const values = range.getValues();
-  const notes = range.getNotes();
-  const newValues = [];
-  const newNotes = [];
-
-  for (let i = 0; i < values.length; i++) {
-    newValues[i] = [];
-    newNotes[i] = [];
-    for (let j = 0; j < values[i].length; j++) {
-      const existingValue = values[i][j] || "0";
-      const existingNote = notes[i][j];
-      
-      // Incrémenter le compteur ou initialiser à 1
-      const currentCount = parseInt(existingValue) || 0;
-      newValues[i][j] = String(currentCount + 1);
-      
-      // Ajouter la nouvelle note
-      newNotes[i][j] = existingNote 
-        ? `${existingNote}\n${note}`
-        : note;
-    }
-  }
-
-  range.setValues(newValues);
-  range.setNotes(newNotes);
-}
-
-function getcaldata(calID, num) {
-  const calendar = CalendarApp.getCalendarById(calID);
-  
-  // Vérifie si le calendrier est sélectionné
-  if (!calendar.isSelected()) {
-  Logger.log(`Calendrier ${calID} non sélectionné - ignoré`);
-  return; // Sort de la fonction si le calendrier n'est pas sélectionné
-  }
-
-  const calendarName = calendar.getName();
-  const calendarDesc = calendar.getDescription();
-  const calendarColor = calendar.getColor();
-  
-  Logger.log(num + " " + calID + ' : ' + calendarName + " : " + calendarDesc + ' -> ' + calendarColor);
-  
-  var sheet = SpreadsheetApp.getActiveSheet();
-  num = sheet.getLastRow() + 1;
-  range = "A" + num + ":E" + num;
-  Logger.log(range);
-  
-  var range = sheet.getRange("A" + num + ":E" + num);
-  range.setBackgroundColor(calendarColor);
-  sheet.appendRow([calendarName, calendarDesc]);
-  
-  Logger.log(listCalendarEventsById(calID, num, calendarColor));
-}
-
-
-function getALLcal() {
+  ss.toast('Récupération des calendriers...', 'Status', -1);
   const calendars = CalendarApp.getAllOwnedCalendars().filter(cal => cal.isSelected());
-  const sheet = SpreadsheetApp.getActiveSheet();
-  
-  calendars.forEach((calendar, index) => {
-    const calendarName = calendar.getName();
-    const calendarDesc = calendar.getDescription();
-    const calendarColor = calendar.getColor();
-    const rowNum = sheet.getLastRow() + 1;
-    
-    sheet.getRange(`A${rowNum}:E${rowNum}`)
-         .setBackgroundColor(calendarColor);
-    sheet.appendRow([calendarName, calendarDesc]);
-    
-    listCalendarEventsById(calendar.getId(), rowNum, calendarColor);
+
+  ss.toast('Chargement des événements...', 'Status', -1);
+  const allData = calendars.map(calendar => {
+    const events = calendar.getEvents(startDate, endDate)
+      .map(event => ({
+        title: event.getTitle(),
+        startTime: event.getStartTime(),
+        endTime: event.getEndTime(),
+        location: event.getLocation() || ''
+      }));
+
+    return {
+      name: calendar.getName(),
+      description: calendar.getDescription() || '',
+      color: calendar.getColor(),
+      events: events
+    };
   });
 
+  ss.toast('Préparation des données...', 'Status', -1);
+  let currentRow = sheet.getLastRow() + 1;
+  const updates = [];
+  const colorUpdates = [];
+  const dateRanges = [];
+  // Modifier la structure de eventSynthesis pour stocker les événements
+  const eventSynthesis = {};
+
+  // Préparer toutes les mises à jour pour tous les calendriers
+  allData.forEach(calData => {
+    // Ajouter l'en-tête du calendrier dans tous les cas
+    updates.push({
+      range: sheet.getRange(currentRow, 1, 1, 5),
+      values: [[calData.name, calData.description, '', '', '']]
+    });
+    colorUpdates.push({
+      range: sheet.getRange(currentRow, 1, 1, 5),
+      color: calData.color
+    });
+
+    if (calData.events.length > 0) {
+      // Traitement des événements si le calendrier en a
+      const eventRows = calData.events.map(event => [
+        '',
+        event.title,
+        formatDate(event.startTime),
+        event.location,
+        formatTime(event.startTime)
+      ]);
+
+      if (eventRows.length > 0) {
+        updates.push({
+          range: sheet.getRange(currentRow + 1, 1, eventRows.length, 5),
+          values: eventRows
+        });
+        colorUpdates.push({
+          range: sheet.getRange(currentRow + 1, 1, eventRows.length, 5),
+          color: calData.color
+        });
+
+        // Préparer les plages de dates et la synthèse
+        calData.events.forEach((event, index) => {
+          const rowNum = currentRow + 1 + index;
+          const dateRange = calculateCellRange(event.startTime, event.endTime, rowNum);
+          if (dateRange) {
+            const [startCol, endCol] = dateRange.split(':').map(ref => ref.match(/[A-Z]+/)[0]);
+            const startIdx = columnLetterToNumber(startCol);
+            const endIdx = columnLetterToNumber(endCol);
+            
+            // Mise à jour du compteur de synthèse et stockage des événements
+            for (let col = startIdx; col <= endIdx; col++) {
+              const cellRef = `${getColumnLetter(col)}${currentRow}`;
+              if (!eventSynthesis[cellRef]) {
+                eventSynthesis[cellRef] = {
+                  count: 0,
+                  color: calData.color,
+                  events: []
+                };
+              }
+              eventSynthesis[cellRef].count += 1;
+              eventSynthesis[cellRef].events.push({
+                title: event.title,
+                time: formatTime(event.startTime)
+              });
+            }
+
+            dateRanges.push({
+              range: dateRange,
+              color: calData.color,
+              note: event.title + "\n" + formatDateTime(event.startTime)
+            });
+          }
+        });
+
+        // Grouper les lignes
+        sheet.getRange(currentRow + 1, 1, eventRows.length, 1).shiftRowGroupDepth(1);
+        currentRow += eventRows.length + 1;
+      } else {
+        currentRow++;
+      }
+    } else {
+      // Incrémenter currentRow même sans événements
+      currentRow++;
+    }
+  });
+
+  // Appliquer les mises à jour standard
+  updates.forEach(update => update.range.setValues(update.values));
+  colorUpdates.forEach(update => update.range.setBackground(update.color));
+
+  // Appliquer la synthèse avec les couleurs et les notes
+  Object.entries(eventSynthesis).forEach(([cellRef, data]) => {
+    const cell = sheet.getRange(cellRef);
+    if (data.count > 1) {
+      cell.setValue(String(data.count));
+    }
+    cell.setBackground(data.color);
+    
+    // Créer la note de synthèse
+    const noteText = data.events
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .map(event => `${event.time} - ${event.title}`)
+      .join('\n');
+    cell.setNote(noteText);
+  });
+
+  // Appliquer les plages de dates
+  dateRanges.forEach(update => {
+    const range = sheet.getRange(update.range);
+    range.setBackground(update.color);
+    range.setNote(update.note);
+  });
+
+  sheet.collapseAllRowGroups();
+}
+
+// Fonction utilitaire pour convertir une lettre de colonne en nombre
+function columnLetterToNumber(letter) {
+  let column = 0;
+  const length = letter.length;
+  for (let i = 0; i < length; i++) {
+    column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+  }
+  return column;
 }
 
 function formatDateTime(date) {
