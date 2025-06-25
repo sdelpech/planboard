@@ -507,22 +507,33 @@ function setColumnWidths() {
 }
 
 function reset() {
-
   const ss = SpreadsheetApp.getActive();
   const oldSheet = ss.getActiveSheet();
-  const oldSheetName = oldSheet.getName();
-  
+  const props = PropertiesService.getDocumentProperties();
+  const startDate = props.getProperty('startDate') ? new Date(props.getProperty('startDate')) : new Date();
+  const endDate = props.getProperty('endDate') ? new Date(props.getProperty('endDate')) : new Date(startDate.getTime() + (4 * 30 * 24 * 60 * 60 * 1000));
+  const formatDateFr = date => date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  let periodLabel;
+  if (endDate.getMonth() === 7) {
+    // Année scolaire
+    periodLabel = `${startDate.getFullYear()}-${endDate.getFullYear()}`;
+  } else {
+    periodLabel = `${formatDateFr(startDate)} au ${formatDateFr(endDate)}`;
+  }
+  const newSheetName = "Planning " + periodLabel;
+
   // Créer une nouvelle feuille
-  const newSheet = ss.insertSheet(oldSheetName + '_new');
-  
+  const newSheet = ss.insertSheet(newSheetName);
+
   // Activer la nouvelle feuille
   newSheet.activate();
-  
+
   // Supprimer l'ancienne feuille
   ss.deleteSheet(oldSheet);
-  
-  // Renommer la nouvelle feuille
-  newSheet.setName(oldSheetName);
+
+  // Renommer la nouvelle feuille (déjà fait à la création, mais pour s'assurer)
+  newSheet.setName(newSheetName);
 }
 
 function showDateRangePickerDialog() {
