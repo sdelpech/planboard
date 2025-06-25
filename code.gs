@@ -193,8 +193,8 @@ function getColumnLetter(columnNumber) {
 
 function translateToFrench(shortName) {
   const translations = {
-    'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mer', 'Thu': 'Jeu', 
-    'Fri': 'Ven', 'Sat': 'Sam', 'Sun': 'Dim',
+    'Mon': 'Lu', 'Tue': 'Ma', 'Wed': 'Me', 'Thu': 'Je', 
+    'Fri': 'Ve', 'Sat': 'Sa', 'Sun': 'Di',
     'Jan': 'Janvier', 'Feb': 'Février', 'Mar': 'Mars', 'Apr': 'Avril',
     'May': 'Mai', 'Jun': 'Juin', 'Jul': 'Juillet', 'Aug': 'Août',
     'Sep': 'Septembre', 'Oct': 'Octobre', 'Nov': 'Novembre', 'Dec': 'Décembre'
@@ -402,9 +402,6 @@ function getALLcal() {
             });
           }
         });
-
-        // Grouper les lignes
-        sheet.getRange(currentRow + 1, 1, eventRows.length, 1).shiftRowGroupDepth(1);
         currentRow += eventRows.length + 1;
       } else {
         currentRow++;
@@ -441,7 +438,7 @@ function getALLcal() {
     range.setBackground(update.color);
     range.setNote(update.note);
   });
-
+  correctGroup()
   sheet.collapseAllRowGroups();
 }
 
@@ -491,40 +488,6 @@ function formatTime(dateString) {
 
   return `${hours}:${minutes}`;
 }
-function groupeLigne(debut,fin){
-  var sheet = SpreadsheetApp.getActiveSheet();
-  
-  // Specify the rows to group (for example, rows 2 to 5)
-  var startRow = debut;
-  var endRow = fin;
-  
-  // Create the group
-  sheet.getRange(startRow, 1, endRow - startRow + 1, 1).shiftRowGroupDepth(1);
-  sheet.collapseAllRowGroups()
-}
-
-
-function gooddate(datepasgood){
-  //Date vs Heure
-  var tabDXH = datepasgood.split("T");
-  var date = tabDXH[0];
-  var heure = tabDXH[1];
-  
-  var tabDJMA = date.split("-");
-  var jour = tabDJMA[2];
-  var mois = tabDJMA[1];
-  var annee = tabDJMA[0];
-
-  var tabHMS = heure.split(":");
-  var heure = tabHMS[0];
-  var minute = tabHMS[1];
-  var seconde = tabHMS[2];
-  var rab = tabHMS[3];
-
-  var dategood = jour + "-" + mois + "-" + annee + " " + heure + ":" + minute;
-  Logger.log(dategood)
-  return(dategood);
-}
 
 function setColumnWidths() {
   const sheet = SpreadsheetApp.getActiveSheet();
@@ -535,7 +498,7 @@ function setColumnWidths() {
   
   // Parcourir toutes les colonnes à partir de F
   for (let col = startColumn; col <= lastColumn; col++) {
-  sheet.setColumnWidth(col, 28);
+  sheet.setColumnWidth(col, 20);
   }
   sheet.setColumnWidth(2,300)
 
@@ -626,8 +589,45 @@ function showDateRangePickerDialog() {
   .setWidth(400)
   .setHeight(150)
   .setTitle('Sélectionner une plage de dates');
-  
   SpreadsheetApp.getUi().showModalDialog(html, 'Sélectionner une plage de dates');
+}
+
+function correctGroup() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const firstDataRow = 6;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < firstDataRow) return;
+  const colors = sheet.getRange(firstDataRow, 1, lastRow - firstDataRow + 1, 1).getBackgrounds();
+  let prevColor = colors[0][0];
+  let start = firstDataRow;
+  for (let i = 1; i < colors.length; i++) {
+    const color = colors[i][0];
+    if (color !== prevColor) {
+      // Groupe uniquement si plus d'une ligne
+      Logger.log(i + "  " + start + " -> " + (firstDataRow + i - 1))
+      if ((firstDataRow + i - 1) > start) {
+        sheet.getRange(start+1, 1, (firstDataRow + i - 1) - start, 1).shiftRowGroupDepth(1);
+      }
+      start = firstDataRow + i;
+      prevColor = color;
+    }
+  }
+  // Dernier groupe
+  if ((firstDataRow + colors.length - 1) > start) {
+    sheet.getRange(start+1, 1, (firstDataRow + colors.length - 1) - start, 1).shiftRowGroupDepth(1);
+  }
+}
+
+function groupeLigne(debut,fin){
+  var sheet = SpreadsheetApp.getActiveSheet();
+  
+  // Specify the rows to group (for example, rows 2 to 5)
+  var startRow = debut;
+  var endRow = fin;
+  
+  // Create the group
+  sheet.getRange(startRow, 1, endRow - startRow + 1, 1).shiftRowGroupDepth(1);
+  sheet.collapseAllRowGroups()
 }
 
 function processCustomDateRange(startDateStr, endDateStr) {
