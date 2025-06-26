@@ -309,7 +309,9 @@ function getALLcal() {
   const endDate = new Date(props.getProperty('endDate') || new Date(startDate.getTime() + (4 * 30 * 24 * 60 * 60 * 1000)));
   
   ss.toast('Récupération des calendriers...', 'Status', -1);
-  const calendars = CalendarApp.getAllOwnedCalendars().filter(cal => cal.isSelected());
+  // Filtrer les agendas cochés et exclure ceux dont le nom contient "semaine" (insensible à la casse)
+  const calendars = CalendarApp.getAllCalendars()
+    .filter(cal => cal.isSelected() && !/semaine/i.test(cal.getName()));
 
   ss.toast('Chargement des événements...', 'Status', -1);
   const allData = calendars.map(calendar => {
@@ -516,23 +518,22 @@ function reset() {
 
   let periodLabel;
   if (endDate.getMonth() === 7) {
-    // Année scolaire
     periodLabel = `${startDate.getFullYear()}-${endDate.getFullYear()}`;
   } else {
     periodLabel = `${formatDateFr(startDate)} au ${formatDateFr(endDate)}`;
   }
-  const newSheetName = "Planning " + periodLabel;
+  let newSheetName = "Planning " + periodLabel;
 
-  // Créer une nouvelle feuille
+  // Si la feuille existe déjà, ajouter un suffixe numérique
+  let suffix = 1;
+  while (ss.getSheetByName(newSheetName)) {
+    newSheetName = "Planning " + periodLabel + " (" + suffix + ")";
+    suffix++;
+  }
+
   const newSheet = ss.insertSheet(newSheetName);
-
-  // Activer la nouvelle feuille
   newSheet.activate();
-
-  // Supprimer l'ancienne feuille
   ss.deleteSheet(oldSheet);
-
-  // Renommer la nouvelle feuille (déjà fait à la création, mais pour s'assurer)
   newSheet.setName(newSheetName);
 }
 
