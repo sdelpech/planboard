@@ -522,9 +522,9 @@ function setColumnWidths() {
   }
   sheet.setColumnWidth(2,300)
 
-  sheet.setColumnWidth(3,75)
-  sheet.setColumnWidth(4,48)
-  sheet.setColumnWidth(5,48)
+  sheet.setColumnWidth(3,72)
+  sheet.setColumnWidth(4,40)
+  sheet.setColumnWidth(5,40)
 }
 
 function reset() {
