@@ -1,12 +1,16 @@
-/**
- * Permet de définir des noms personnalisés pour les calendriers.
- * Modifiez le mapping dans l'objet customCalendarNames selon vos besoins.
- */
 function getCustomCalendarName(calendarName) {
   // Mapping nom d'agenda -> nom personnalisé
   const customCalendarNames = {
-    "NomAgenda1": "Nom personnalisé 1",
-    "NomAgenda2": "Nom personnalisé 2",
+    "infocom@iut-rodez.fr": "Département INFOCOM",
+    "fc.alternance@iut-rodez.fr": "Formation continue et alternance",
+    "ri@iut-rodez.fr": "Relations internationales",
+    "vie.etudiante@iut-rodez.fr": "Vie étudiante",
+    "cj@iut-rodez.fr": "Département CJ",
+    "qlio@iut-rodez.fr": "Département QLIO",
+    "informatique@iut-rodez.fr": "Département Informatique",
+    "gea@iut-rodez.fr": "Département GEA",
+    "scolarite@iut-rodez.fr": "Scolarite",
+    "direction@iut-rodez.fr": "Direction de l'IUT",
     // Ajoutez d'autres mappings ici
   };
   return customCalendarNames[calendarName] || calendarName;
@@ -88,8 +92,8 @@ function processWindowWidthAndScroll(width) {
     sheet.getColumnWidth(5)
   ].reduce((sum, w) => sum + w, 0);
   
-  // Largeur standard d'une colonne de date (28px)
-  const dateColumnWidth = 28;
+  // Largeur standard d'une colonne de date (20px)
+  const dateColumnWidth = 20;
   
   // Calculer le nombre de colonnes visibles
   const visibleWidth = width - fixedWidth;
@@ -272,7 +276,7 @@ function getLigneDate(numligne) {
   
   if (numligne === "1") return emptyColumns.concat(dateLines.ligne1);
   if (numligne === "2") {
-    return ["Calendrier", "Description", "Jour", "Lieu", "Heure"].concat(dateLines.ligne2);
+    return ["Calendrier", "Description", "Jour", "Début", "Fin"].concat(dateLines.ligne2);
   }
   if (numligne === "3") return emptyColumns.concat(dateLines.ligne3);
   
@@ -371,8 +375,8 @@ function getALLcal() {
         '',
         event.title,
         formatDate(event.startTime),
-        event.location,
-        formatTime(event.startTime)
+        formatTime(event.startTime),
+        formatTime(event.endTime)
       ]);
 
       if (eventRows.length > 0) {
@@ -518,8 +522,9 @@ function setColumnWidths() {
   }
   sheet.setColumnWidth(2,300)
 
-  sheet.setColumnWidth(3,78)
-  sheet.setColumnWidth(5,50)
+  sheet.setColumnWidth(3,75)
+  sheet.setColumnWidth(4,48)
+  sheet.setColumnWidth(5,48)
 }
 
 function reset() {
