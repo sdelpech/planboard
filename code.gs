@@ -1,3 +1,17 @@
+/**
+ * Permet de définir des noms personnalisés pour les calendriers.
+ * Modifiez le mapping dans l'objet customCalendarNames selon vos besoins.
+ */
+function getCustomCalendarName(calendarName) {
+  // Mapping nom d'agenda -> nom personnalisé
+  const customCalendarNames = {
+    "NomAgenda1": "Nom personnalisé 1",
+    "NomAgenda2": "Nom personnalisé 2",
+    // Ajoutez d'autres mappings ici
+  };
+  return customCalendarNames[calendarName] || calendarName;
+}
+
 function lance_script(startDate = new Date(), endDate = null){
   const ss = SpreadsheetApp.getActive();
   ss.toast('Initialisation...', 'Status', -1);
@@ -309,7 +323,6 @@ function getALLcal() {
   const endDate = new Date(props.getProperty('endDate') || new Date(startDate.getTime() + (4 * 30 * 24 * 60 * 60 * 1000)));
   
   ss.toast('Récupération des calendriers...', 'Status', -1);
-  // Filtrer les agendas cochés et exclure ceux dont le nom contient "semaine" (insensible à la casse)
   const calendars = CalendarApp.getAllCalendars()
     .filter(cal => cal.isSelected() && !/semaine/i.test(cal.getName()));
 
@@ -323,8 +336,9 @@ function getALLcal() {
         location: event.getLocation() || ''
       }));
 
+    // Utiliser le nom personnalisé si défini
     return {
-      name: calendar.getName(),
+      name: getCustomCalendarName(calendar.getName()),
       description: calendar.getDescription() || '',
       color: calendar.getColor(),
       events: events
