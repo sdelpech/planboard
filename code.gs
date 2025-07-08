@@ -16,7 +16,21 @@ function getCustomCalendarName(calendarName) {
   return customCalendarNames[calendarName] || calendarName;
 }
 
+/**
+ * Vérifie si l'utilisateur courant est autorisé à exécuter le script.
+ * Modifiez la variable ALLOWED_USER_EMAIL pour définir l'utilisateur autorisé.
+ */
+function isAllowedUser() {
+  var ALLOWED_USER_EMAIL = "utilisateur.autorise@iut-rodez.fr"; // <-- À personnaliser
+  var currentUser = Session.getActiveUser().getEmail();
+  return currentUser === ALLOWED_USER_EMAIL;
+}
+
 function lance_script(startDate = new Date(), endDate = null){
+  if (!isAllowedUser()) {
+    SpreadsheetApp.getUi().alert("Vous n'êtes pas autorisé à exécuter ce script.");
+    return;
+  }
   const ss = SpreadsheetApp.getActive();
   ss.toast('Initialisation...', 'Status', -1);
   
