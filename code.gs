@@ -21,7 +21,7 @@ function getCustomCalendarName(calendarName) {
  * Modifiez la variable ALLOWED_USER_EMAIL pour définir l'utilisateur autorisé.
  */
 function isAllowedUser() {
-  var ALLOWED_USER_EMAIL = "utilisateur.autorise@iut-rodez.fr"; // <-- À personnaliser
+  var ALLOWED_USER_EMAIL = "emailutilisateur"; // <-- À personnaliser
   var currentUser = Session.getActiveUser().getEmail();
   return currentUser === ALLOWED_USER_EMAIL;
 }
@@ -33,39 +33,55 @@ function lance_script(startDate = new Date(), endDate = null){
   }
   const ss = SpreadsheetApp.getActive();
   ss.toast('Initialisation...', 'Status', -1);
-  
+
+  // Correction : s'assurer que startDate et endDate sont bien des objets Date
+  if (!(startDate instanceof Date)) {
+    startDate = new Date(startDate);
+  }
   if (!endDate) {
     endDate = new Date(startDate);
     endDate.setMonth(startDate.getMonth() + 4);
+  } else if (!(endDate instanceof Date)) {
+    endDate = new Date(endDate);
   }
-  
+
   // Stocker les dates dans les propriétés du document
   PropertiesService.getDocumentProperties().setProperties({
     'startDate': startDate.toISOString(),
     'endDate': endDate.toISOString()
   });
-  
+
   ss.toast('Préparation de la feuille...', 'Status', -1);
   ajout_lignes_debut();
-  
+
   ss.toast('Chargement des calendriers...', 'Status', -1);
   getALLcal();
-  
+
   ss.toast('Mise à jour terminée !', 'Status', 3);
 }
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
+  const isAllowed = isAllowedUser();
+  const lock = "🔒 ";
+
   ui.createMenu('IUT Planning')
-    .addItem('Rafraichir (4 mois)', 'lance_script')
-    .addItem('Afficher année scolaire...', 'showYearPickerDialog')
-    .addItem('Sélectionner une plage de dates...', 'showDateRangePickerDialog')
+    .addItem('Étendre tous les groupes', 'expandAllGroups')
+    .addItem('Regrouper tous les groupes', 'collapseAllGroups')
+    .addItem('Aller à aujourd\'hui', 'detectAndScrollToToday')
     .addSeparator()
-    .addSubMenu(ui.createMenu('Affichage')
-      .addItem('Étendre tous les groupes', 'expandAllGroups')
-      .addItem('Regrouper tous les groupes', 'collapseAllGroups')
-      .addSeparator()
-      .addItem('Aller à aujourd\'hui', 'detectAndScrollToToday'))
+    .addItem(
+      (isAllowed ? '' : lock) + 'Rafraichir (4 mois)', 
+      'lance_script'
+    )
+    .addItem(
+      (isAllowed ? '' : lock) + 'Afficher année scolaire...', 
+      'showYearPickerDialog'
+    )
+    .addItem(
+      (isAllowed ? '' : lock) + 'Sélectionner une plage de dates...', 
+      'showDateRangePickerDialog'
+    )
     .addToUi();
 }
 
@@ -679,4 +695,7 @@ function processCustomDateRange(startDateStr, endDateStr) {
   const startDate = new Date(startDateStr);
   const endDate = new Date(endDateStr);
   lance_script(startDate, endDate);
+}
+function refreshFourMonths() {
+  lance_script(new Date());
 }
